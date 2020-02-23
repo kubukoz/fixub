@@ -3,8 +3,10 @@ A program for fixing Polish characters in subtitles.
 
 # Build native image
 
-`sbt "set graalVMNativeImageOptions += "-H:+AddAllCharsets"; graalvm-native-image:packageBin"`
+```bash
+sbt graalvm-native-image:packageBin
+```
 
 # Usage
 
-???
+`./run input output [input-charset:Windows-1250]`
