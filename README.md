@@ -1,4 +1,5 @@
 # fixub
+
 A program for fixing Polish characters in subtitles.
 
 # Build native image
@@ -9,4 +10,6 @@ sbt graalvm-native-image:packageBin
 
 # Usage
 
-`./run input output [input-charset:Windows-1250]`
+The program now reads input from stdin and writes to stdout, for maximum flexibility.
+
+`./run [input-charset:Windows-1250] < input > output`

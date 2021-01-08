@@ -20,37 +20,25 @@ object Main extends IOApp {
 
   val bytesToBitVectors: Pipe[IO, Byte, BitVector] = _.chunks.map(_.toArray).map(BitVector(_))
 
+  def decode(charsetName: Option[String]): Pipe[IO, Byte, String] =
+    bytes =>
+      fs2
+        .Stream
+        .eval(charsetName.map(ch => IO(Charset.forName(ch))).getOrElse(DefaultInputEncoding.pure[IO]))
+        .flatMap(charset => bytes.through(org.http4s.internal.decode[IO](org.http4s.Charset(charset))))
+
   override def run(args: List[String]): IO[ExitCode] =
-    args match {
-      case srcFileName :: destFileName :: remainingArgs =>
-        val codec: IO[Decoder[String]] =
-          remainingArgs.headOption.map(name => IO(Charset.forName(name))).getOrElse(DefaultInputEncoding.pure[IO]).map {
-            scodec.codecs.string(_).emap {
-              case "" => Attempt.failure(Err("Empty string"))
-              case s  => Attempt.successful(s)
-            }
-          }
+    Blocker[IO]
+      .use { blocker =>
+        fs2
+          .io
+          .stdin[IO](ChunkSize, blocker)
+          .through(decode(args.headOption))
+          .through(fs2.text.utf8Encode[IO])
+          .through(fs2.io.stdout[IO](blocker))
+          .compile
+          .drain
+          .as(ExitCode.Success)
+      }
 
-        Blocker[IO].use { implicit blocker =>
-          codec.flatMap { implicit c =>
-            convertAndSave(from = srcFileName, to = destFileName).compile.drain
-          }
-        } *> putStrLn("Converted file").as(ExitCode.Success)
-      case _ =>
-        putError("usage: fixub input output [src-encoding]").as(ExitCode.Error)
-    }
-
-  private def convertAndSave(from: String, to: String)(implicit blocker: Blocker, stringDecoder: Decoder[String]) =
-    fs2
-      .io
-      .file
-      .readAll[IO](
-        Paths.get(from),
-        blocker,
-        chunkSize = ChunkSize
-      )
-      .through(bytesToBitVectors)
-      .through(StreamDecoder.many(stringDecoder).toPipe[IO])
-      .through(fs2.text.utf8Encode[IO])
-      .through(fs2.io.file.writeAll[IO](Paths.get(to), blocker))
 }
